@@ -96,6 +96,28 @@
 7. 访问应用
    打开浏览器，访问 `http://127.0.0.1:5000`
 
+## 部署到Vercel
+
+本项目可以部署到Vercel平台，按照以下步骤操作：
+
+1. 确保项目已上传到GitHub
+
+2. 在项目根目录中添加以下文件:
+   - `vercel.json`: 配置部署设置
+   - `wsgi.py`: WSGI入口点
+   - 确保`requirements.txt`包含所有依赖
+
+3. 在Vercel上导入项目:
+   - 使用GitHub账号登录[Vercel](https://vercel.com/)
+   - 点击"Add New Project"，从GitHub导入仓库
+   - 配置项目设置（指定根目录等）
+   - 点击"Deploy"开始部署
+
+4. **注意事项**:
+   - Vercel是无状态平台，不适合持久化存储
+   - 对于生产环境，建议将TinyDB替换为MongoDB Atlas或其他云数据库
+   - 用户上传的图片应存储在S3、Cloudinary等云存储服务
+
 ## 使用指南
 
 1. 首次使用时，需要注册一个账号
@@ -117,7 +139,7 @@
 
 ## 联系方式
 
-如有问题或建议，请联系138698503@qq.com
+如有问题或建议，请提交Issue或Pull Request。
 
 ## 许可证
 

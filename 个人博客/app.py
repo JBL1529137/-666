@@ -17,14 +17,23 @@ import tempfile
 import secrets
 
 # 配置应用
-app = Flask(__name__)
+app = Flask(__name__, 
+            static_folder='static',
+            static_url_path='/static')
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_key_should_be_changed_in_production')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 限制上传文件大小为10MB
 
 # 确保上传目录存在
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+upload_folder = app.config['UPLOAD_FOLDER']
+os.makedirs(upload_folder, exist_ok=True)
+
+# Vercel环境中的临时目录处理
+if os.environ.get('VERCEL_ENV') == 'production':
+    app.config['TEMP_FOLDER'] = '/tmp'
+else:
+    app.config['TEMP_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp')
+    os.makedirs(app.config['TEMP_FOLDER'], exist_ok=True)
 
 # 初始化Flask-Login
 login_manager = LoginManager()
@@ -927,10 +936,10 @@ def autosave_note():
 def inject_now():
     return {'now': datetime.now()}
 
-if __name__ == '__main__':
-    # 打印当前工作目录和上传目录信息
-    print(f"当前工作目录: {os.getcwd()}")
-    print(f"上传目录配置: {app.config['UPLOAD_FOLDER']}")
-    print(f"上传目录是否存在: {os.path.exists(app.config['UPLOAD_FOLDER'])}")
-    
-    app.run(debug=True)
+# 在文件最后添加这段代码，确保Vercel可以找到app实例
+app.debug = False
+# 确保应用可被Vercel识别
+application = app
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0")
