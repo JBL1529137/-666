@@ -6,6 +6,8 @@
 <!-- SimpleMDE - Markdown编辑器 -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css">
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 <style>
     .editor-toolbar {
         border-radius: 0.25rem 0.25rem 0 0;
@@ -23,6 +25,23 @@
     }
     .select2-container {
         width: 100% !important;
+    }
+    /* 确保图片上传按钮可见 */
+    .fa-picture-o::before,
+    .fa-image::before,
+    .fa-upload::before {
+        display: inline-block !important;
+        visibility: visible !important;
+    }
+    /* 自定义上传按钮样式 */
+    .upload-image-btn {
+        background-color: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+    .upload-image-btn:hover {
+        background-color: #e0e0e0;
     }
 </style>
 {% endblock %}
@@ -93,14 +112,16 @@
             </div>
             
             <div class="row mb-3">
-                <div class="col-md-6">
+                <div class="col-md-12">
                     <label for="content" class="form-label">笔记内容（Markdown格式）</label>
+                    <div class="d-flex mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="external-upload-btn">
+                            <i class="fas fa-upload me-1"></i>上传图片
+                        </button>
+                        <small class="text-muted ms-2 mt-1">点击此按钮可上传图片插入到笔记中</small>
+                    </div>
                     <textarea class="form-control" id="content" name="content" rows="15" 
                               required>{{ note.content if note else '' }}</textarea>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">实时预览</label>
-                    <div class="preview-area" id="preview"></div>
                 </div>
             </div>
             
@@ -144,11 +165,64 @@
         </div>
     </div>
 </div>
+
+<!-- 图片尺寸调整对话框 -->
+<div class="modal fade" id="imageSizeModal" tabindex="-1" aria-labelledby="imageSizeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageSizeModalLabel">调整图片尺寸</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="image-size-form">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="image-width" class="form-label">宽度 (像素)</label>
+                                <input type="number" class="form-control" id="image-width" min="1" max="1200" value="300">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="image-height" class="form-label">高度 (像素)</label>
+                                <input type="number" class="form-control" id="image-height" min="1" max="1200" value="200">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="maintain-ratio" checked>
+                        <label class="form-check-label" for="maintain-ratio">
+                            保持宽高比
+                        </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">常用尺寸</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary preset-size" data-width="320" data-height="240">320x240</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary preset-size" data-width="640" data-height="480">640x480</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary preset-size" data-width="800" data-height="600">800x600</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary preset-size" data-width="1024" data-height="768">1024x768</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="apply-image-size-btn">应用</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <!-- SimpleMDE - Markdown编辑器 -->
 <script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
+<!-- jQuery直接从CDN引入，确保可用性 -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
 <!-- Select2 -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
 <!-- Marked - Markdown解析器 -->
@@ -156,182 +230,394 @@
 <!-- DOMPurify - 防XSS攻击 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.4/purify.min.js"></script>
 <script>
-    // 初始化Select2
+    // 所有代码放在DOM加载完成后执行
     $(document).ready(function() {
+        // 初始化Select2
         $('.select2-tags').select2({
             tags: true,
             tokenSeparators: [',', ' '],
             placeholder: "添加标签"
         });
         
-        // 表单提交监听
-        $('#note-form').on('submit', function(e) {
-            console.log('表单提交事件触发');
-            return true; // 允许表单正常提交
-        });
-        
-        // 保存按钮点击监听
-        $('#save-note-btn').on('click', function() {
-            console.log('保存按钮被点击');
-            $('#note-form').submit();
-        });
-    });
-    
-    // 初始化Markdown编辑器
-    var simplemde = new SimpleMDE({
-        element: document.getElementById("content"),
-        spellChecker: false,
-        autosave: {
-            enabled: false
-        },
-        toolbar: [
-            "bold", "italic", "strikethrough", "heading", "|",
-            "code", "quote", "unordered-list", "ordered-list", "|", 
-            "link", 
-            {
-                name: "image",
-                action: function customImage(editor) {
-                    $('#imageUploadModal').modal('show');
-                },
-                className: "fa fa-picture-o",
-                title: "插入图片",
+        // 初始化Markdown编辑器
+        var simplemde = new SimpleMDE({
+            element: document.getElementById("content"),
+            spellChecker: false,
+            autosave: {
+                enabled: false
             },
-            "table", "|",
-            "preview", "side-by-side", "fullscreen", "|",
-            "guide"
-        ],
-        status: ["autosave", "lines", "words", "cursor"]
-    });
-    
-    // 实时预览
-    simplemde.codemirror.on("change", function() {
-        var content = simplemde.value();
-        var html = marked.parse(content);
-        var sanitizedHtml = DOMPurify.sanitize(html);
-        document.getElementById('preview').innerHTML = sanitizedHtml;
+            toolbar: [
+                "bold", "italic", "strikethrough", "heading", "|",
+                "code", "quote", "unordered-list", "ordered-list", "|", 
+                "link", 
+                {
+                    name: "custom-image",
+                    action: function customImage(editor) {
+                        $('#imageUploadModal').modal('show');
+                    },
+                    className: "fa fa-picture-o",
+                    title: "插入图片",
+                },
+                {
+                    name: "image-size",
+                    action: function(editor) {
+                        insertImageSize(editor);
+                    },
+                    className: "fa fa-image",
+                    title: "调整图片尺寸",
+                },
+                "table", "|",
+                "preview", "side-by-side", "fullscreen", "|",
+                "guide"
+            ],
+            status: ["autosave", "lines", "words", "cursor"],
+            renderingConfig: {
+                singleLineBreaks: false,
+                codeSyntaxHighlighting: true
+            }
+        });
         
-        // 自动保存 - 仅对已有笔记执行
-        var noteIdElement = document.getElementById('note-id');
-        if(noteIdElement) {
-            autoSaveNote();
+        // 自定义Markdown渲染设置
+        marked.use({
+            renderer: {
+                image(href, title, text) {
+                    // 检查文本是否包含宽高信息 (如 200x150)
+                    var dimensions = '';
+                    var widthHeight = text.match(/(\d+)x(\d+)/);
+                    
+                    if (widthHeight) {
+                        var width = widthHeight[1];
+                        var height = widthHeight[2];
+                        dimensions = ` width="${width}" height="${height}"`;
+                    }
+                    
+                    title = title || '';
+                    return `<img src="${href}" alt="${text}" title="${title}"${dimensions} class="img-fluid">`;
+                }
+            }
+        });
+        
+        // 添加直接访问模态窗口的按钮
+        var editorToolbar = document.querySelector('.editor-toolbar');
+        if (editorToolbar) {
+            var uploadButton = document.createElement('button');
+            uploadButton.type = 'button';
+            uploadButton.className = 'upload-image-btn';
+            uploadButton.innerHTML = '<i class="fa fa-upload"></i>';
+            uploadButton.title = '上传图片';
+            uploadButton.style.cssText = 'margin-left: 5px; padding: 3px 5px;';
+            uploadButton.onclick = function(e) {
+                e.preventDefault();
+                $('#imageUploadModal').modal('show');
+            };
+            editorToolbar.appendChild(uploadButton);
         }
-    });
-    
-    // 初始触发一次预览更新
-    setTimeout(function() {
-        var content = simplemde.value();
-        var html = marked.parse(content);
-        var sanitizedHtml = DOMPurify.sanitize(html);
-        document.getElementById('preview').innerHTML = sanitizedHtml;
-    }, 500);
-    
-    // 自动保存功能
-    var autoSaveTimeout;
-    function autoSaveNote() {
-        clearTimeout(autoSaveTimeout);
-        document.getElementById('autosave-status').textContent = "正在保存...";
         
-        autoSaveTimeout = setTimeout(function() {
-            // 检查note-id元素是否存在（新建笔记时不存在）
+        // 自动保存功能
+        var autoSaveTimeout;
+        function autoSaveNote() {
+            clearTimeout(autoSaveTimeout);
+            var autosaveStatus = document.getElementById('autosave-status');
+            if (autosaveStatus) {
+                autosaveStatus.textContent = "正在保存...";
+            }
+            
+            autoSaveTimeout = setTimeout(function() {
+                // 检查note-id元素是否存在（新建笔记时不存在）
+                var noteIdElement = document.getElementById('note-id');
+                if (!noteIdElement) {
+                    if (autosaveStatus) {
+                        autosaveStatus.textContent = "";
+                    }
+                    return;
+                }
+                
+                var noteId = noteIdElement.value;
+                var title = document.getElementById('title').value;
+                var content = simplemde.value();
+                
+                if (!noteId || !title || !content) {
+                    if (autosaveStatus) {
+                        autosaveStatus.textContent = "";
+                    }
+                    return;
+                }
+                
+                $.ajax({
+                    url: '{{ url_for("autosave_note") }}',
+                    type: 'POST',
+                    data: {
+                        note_id: noteId,
+                        title: title,
+                        content: content,
+                        csrf_token: '{{ csrf_token() }}'
+                    },
+                    success: function(response) {
+                        if (autosaveStatus) {
+                            autosaveStatus.textContent = "已自动保存";
+                            setTimeout(function() {
+                                autosaveStatus.textContent = "";
+                            }, 2000);
+                        }
+                    },
+                    error: function() {
+                        if (autosaveStatus) {
+                            autosaveStatus.textContent = "自动保存失败";
+                        }
+                    }
+                });
+            }, 1000);
+        }
+        
+        // 当内容改变时触发自动保存
+        simplemde.codemirror.on("change", function() {
             var noteIdElement = document.getElementById('note-id');
-            if (!noteIdElement) {
-                document.getElementById('autosave-status').textContent = "";
+            if (noteIdElement) {
+                autoSaveNote();
+            }
+        });
+        
+        // 图片上传
+        document.getElementById('upload-image-btn').addEventListener('click', function() {
+            var fileInput = document.getElementById('image-file');
+            var statusDiv = document.getElementById('upload-status');
+            
+            if (!fileInput || !fileInput.files.length) {
+                statusDiv.textContent = "请选择一个图片文件";
+                statusDiv.classList.remove('d-none');
+                statusDiv.classList.remove('alert-success');
+                statusDiv.classList.add('alert-danger');
                 return;
             }
             
-            var noteId = noteIdElement.value;
-            var title = document.getElementById('title').value;
-            var content = simplemde.value();
+            var file = fileInput.files[0];
             
-            if (!noteId || !title || !content) {
-                document.getElementById('autosave-status').textContent = "";
-                return;
-            }
+            var formData = new FormData();
+            formData.append('image', file);
+            formData.append('csrf_token', '{{ csrf_token() }}');
+            
+            statusDiv.textContent = "正在上传...";
+            statusDiv.classList.remove('d-none');
+            statusDiv.classList.remove('alert-danger');
+            statusDiv.classList.add('alert-info');
             
             $.ajax({
-                url: '{{ url_for("autosave_note") }}',
+                url: '{{ url_for("upload_image") }}',
                 type: 'POST',
-                data: {
-                    note_id: noteId,
-                    title: title,
-                    content: content,
-                    csrf_token: '{{ csrf_token() }}'
-                },
+                data: formData,
+                processData: false,
+                contentType: false,
                 success: function(response) {
-                    document.getElementById('autosave-status').textContent = "已自动保存";
-                    setTimeout(function() {
-                        document.getElementById('autosave-status').textContent = "";
-                    }, 2000);
+                    // 插入图片链接到编辑器
+                    var imageUrl = response.url;
+                    var cm = simplemde.codemirror;
+                    var output = '![' + file.name + '](' + imageUrl + ')';
+                    cm.replaceSelection(output);
+                    
+                    // 关闭对话框
+                    $('#imageUploadModal').modal('hide');
+                    
+                    // 重置表单
+                    document.getElementById('image-upload-form').reset();
+                    statusDiv.classList.add('d-none');
                 },
-                error: function() {
-                    document.getElementById('autosave-status').textContent = "自动保存失败";
+                error: function(xhr, status, error) {
+                    var errorMessage = "上传失败";
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMessage = xhr.responseJSON.error;
+                    } else if (xhr.status === 0) {
+                        errorMessage = "无法连接到服务器，请检查网络连接";
+                    } else if (xhr.status === 403) {
+                        errorMessage = "权限被拒绝，可能是会话已过期";
+                    } else if (xhr.status === 413) {
+                        errorMessage = "文件太大，超出服务器允许的最大上传大小";
+                    }
+                    
+                    statusDiv.textContent = errorMessage;
+                    statusDiv.classList.remove('alert-info');
+                    statusDiv.classList.add('alert-danger');
                 }
             });
-        }, 1000);
-    }
-    
-    // 图片上传
-    document.getElementById('upload-image-btn').addEventListener('click', function() {
-        var fileInput = document.getElementById('image-file');
-        var statusDiv = document.getElementById('upload-status');
+        });
         
-        if (!fileInput || !fileInput.files.length) {
-            statusDiv.textContent = "请选择一个图片文件";
-            statusDiv.classList.remove('d-none');
-            statusDiv.classList.remove('alert-success');
-            statusDiv.classList.add('alert-danger');
-            return;
-        }
-        
-        var file = fileInput.files[0];
-        var formData = new FormData();
-        formData.append('image', file);
-        formData.append('csrf_token', '{{ csrf_token() }}');
-        
-        statusDiv.textContent = "正在上传...";
-        statusDiv.classList.remove('d-none');
-        statusDiv.classList.remove('alert-danger');
-        statusDiv.classList.add('alert-info');
-        
-        $.ajax({
-            url: '{{ url_for("upload_image") }}',
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                // 插入图片链接到编辑器
-                var imageUrl = response.url;
-                var cm = simplemde.codemirror;
-                var output = '![' + file.name + '](' + imageUrl + ')';
-                cm.replaceSelection(output);
-                
-                // 关闭对话框
-                $('#imageUploadModal').modal('hide');
-                
-                // 重置表单
-                document.getElementById('image-upload-form').reset();
-                statusDiv.classList.add('d-none');
-            },
-            error: function(xhr) {
-                var errorMessage = "上传失败";
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    errorMessage = xhr.responseJSON.error;
-                }
-                statusDiv.textContent = errorMessage;
-                statusDiv.classList.remove('alert-info');
-                statusDiv.classList.add('alert-danger');
+        // 快捷键：Ctrl+S 保存
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                $('#note-form').submit();
             }
         });
-    });
-    
-    // 快捷键：Ctrl+S 保存
-    document.addEventListener('keydown', function(e) {
-        if (e.ctrlKey && e.key === 's') {
-            e.preventDefault();
-            console.log('触发Ctrl+S表单提交');
-            $('#note-form').submit();
+        
+        // 为外部上传按钮添加事件监听
+        document.getElementById('external-upload-btn').addEventListener('click', function() {
+            $('#imageUploadModal').modal('show');
+        });
+        
+        // 图片尺寸调整函数
+        function insertImageSize(editor) {
+            var cm = editor.codemirror;
+            var selection = cm.getSelection();
+            var cursorPos = cm.getCursor();
+            var line = cm.getLine(cursorPos.line);
+            
+            // 检查光标是否在图片标记内
+            var imgRegex = /!\[(.*?)\]\((.*?)\)/;
+            var match = line.match(imgRegex);
+            
+            if (match) {
+                // 提取当前尺寸
+                var currentText = match[1];
+                var currentUrl = match[2];
+                var currentSize = currentText.match(/(\d+)x(\d+)/);
+                
+                var currentWidth = 300;
+                var currentHeight = 200;
+                
+                if (currentSize) {
+                    currentWidth = parseInt(currentSize[1]);
+                    currentHeight = parseInt(currentSize[2]);
+                }
+                
+                // 设置对话框中的值
+                $('#image-width').val(currentWidth);
+                $('#image-height').val(currentHeight);
+                
+                // 存储原始图片信息
+                window.currentImageInfo = {
+                    line: cursorPos.line,
+                    text: currentText,
+                    url: currentUrl,
+                    originalWidth: currentWidth,
+                    originalHeight: currentHeight,
+                    ch: line.indexOf('!['),
+                    lineLength: line.length
+                };
+                
+                // 显示对话框
+                $('#imageSizeModal').modal('show');
+            } else {
+                alert("请先将光标放在图片上，或选择要调整的图片");
+            }
         }
+        
+        // 预设尺寸按钮处理
+        $(document).on('click', '.preset-size', function() {
+            var width = $(this).data('width');
+            var height = $(this).data('height');
+            
+            $('#image-width').val(width);
+            $('#image-height').val(height);
+        });
+        
+        // 保持比例计算
+        var originalRatio = 1.5; // 默认比例
+        
+        $('#image-width, #image-height').on('input', function() {
+            if ($('#maintain-ratio').is(':checked')) {
+                var imageInfo = window.currentImageInfo;
+                if (imageInfo) {
+                    originalRatio = imageInfo.originalWidth / imageInfo.originalHeight;
+                }
+                
+                if ($(this).attr('id') === 'image-width') {
+                    // 宽度改变，计算高度
+                    var width = parseInt($(this).val()) || 0;
+                    var height = Math.round(width / originalRatio);
+                    $('#image-height').val(height);
+                } else {
+                    // 高度改变，计算宽度
+                    var height = parseInt($(this).val()) || 0;
+                    var width = Math.round(height * originalRatio);
+                    $('#image-width').val(width);
+                }
+            }
+        });
+        
+        // 应用尺寸按钮
+        $('#apply-image-size-btn').on('click', function() {
+            var width = parseInt($('#image-width').val());
+            var height = parseInt($('#image-height').val());
+            
+            if (width > 0 && height > 0 && window.currentImageInfo) {
+                var info = window.currentImageInfo;
+                var cm = simplemde.codemirror;
+                
+                // 生成新的图片标记
+                var newImgTag = `![${width}x${height}](${info.url})`;
+                
+                // 更新编辑器内容
+                cm.replaceRange(newImgTag, 
+                    {line: info.line, ch: info.ch}, 
+                    {line: info.line, ch: info.ch + (info.lineLength - info.ch)}
+                );
+                
+                // 关闭对话框
+                $('#imageSizeModal').modal('hide');
+            } else {
+                alert("请输入有效的宽度和高度");
+            }
+        });
+        
+        // 添加粘贴图片支持
+        var cmEditor = simplemde.codemirror;
+        cmEditor.on('paste', function(editor, event) {
+            var clipboardData = event.clipboardData || window.clipboardData;
+            
+            // 检查是否有图片数据
+            if (clipboardData && clipboardData.items) {
+                var items = clipboardData.items;
+                
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                        event.preventDefault();
+                        
+                        // 获取图片文件
+                        var blob = items[i].getAsFile();
+                        var reader = new FileReader();
+                        
+                        reader.onload = function(event) {
+                            // 显示上传状态
+                            var statusText = '正在上传粘贴的图片...';
+                            var tempText = `![${statusText}](正在上传...)`;
+                            var cursor = cmEditor.getCursor();
+                            cmEditor.replaceSelection(tempText);
+                            var placeholderPos = {
+                                from: {line: cursor.line, ch: cursor.ch},
+                                to: {line: cursor.line, ch: cursor.ch + tempText.length}
+                            };
+                            
+                            // 创建文件对象
+                            var formData = new FormData();
+                            formData.append('image', blob, 'pasted_image.png');
+                            formData.append('csrf_token', '{{ csrf_token() }}');
+                            
+                            // 上传图片
+                            $.ajax({
+                                url: '{{ url_for("upload_image") }}',
+                                type: 'POST',
+                                data: formData,
+                                processData: false,
+                                contentType: false,
+                                success: function(response) {
+                                    // 插入图片链接
+                                    var imageUrl = response.url;
+                                    var timestamp = new Date().getTime();
+                                    var outputText = `![pasted_image_${timestamp}](${imageUrl})`;
+                                    cmEditor.replaceRange(outputText, placeholderPos.from, placeholderPos.to);
+                                },
+                                error: function(xhr, status, error) {
+                                    cmEditor.replaceRange('![上传失败，请重试]', placeholderPos.from, placeholderPos.to);
+                                    alert('图片上传失败: ' + (xhr.responseJSON ? xhr.responseJSON.error : error || '未知错误'));
+                                }
+                            });
+                        };
+                        
+                        reader.readAsDataURL(blob);
+                        break;
+                    }
+                }
+            }
+        });
     });
 </script>
 {% endblock %} 

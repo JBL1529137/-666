@@ -835,45 +835,59 @@ def restore_data_route():
 @app.route('/upload_image', methods=['POST'])
 @login_required
 def upload_image():
-    # CSRF验证
-    token = request.form.get('csrf_token')
-    if not token or not validate_csrf_token(token):
-        return jsonify({'error': 'CSRF验证失败'}), 403
-    
-    if 'image' not in request.files:
-        return jsonify({'error': '未选择图片文件'}), 400
-    
-    file = request.files['image']
-    
-    if file.filename == '':
-        return jsonify({'error': '未选择图片文件'}), 400
-    
-    if file and allowed_file(file.filename):
-        # 生成安全的文件名
-        filename = secure_filename(file.filename)
+    try:
+        # CSRF验证
+        token = request.form.get('csrf_token')
+        if not token or not validate_csrf_token(token):
+            print(f"CSRF验证失败: {token}")
+            return jsonify({'error': 'CSRF验证失败'}), 403
         
-        # 生成唯一文件名（使用时间戳和随机ID）
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        unique_filename = f"{timestamp}_{str(uuid.uuid4().hex[:8])}_{filename}"
+        if 'image' not in request.files:
+            print("请求中没有图片文件")
+            return jsonify({'error': '未选择图片文件'}), 400
         
-        # 确定保存路径
-        year_month = datetime.now().strftime('%Y%m')
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], year_month)
+        file = request.files['image']
         
-        if not os.path.exists(upload_path):
-            os.makedirs(upload_path)
+        if file.filename == '':
+            print("文件名为空")
+            return jsonify({'error': '未选择图片文件'}), 400
         
-        file_path = os.path.join(upload_path, unique_filename)
+        print(f"尝试上传文件: {file.filename}")
         
-        # 保存文件
-        file.save(file_path)
-        
-        # 返回文件URL
-        file_url = url_for('static', filename=f'uploads/{year_month}/{unique_filename}')
-        
-        return jsonify({'url': file_url})
-    
-    return jsonify({'error': '不支持的文件类型'}), 400
+        if file and allowed_file(file.filename):
+            # 生成安全的文件名
+            filename = secure_filename(file.filename)
+            
+            # 生成唯一文件名（使用时间戳和随机ID）
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            unique_filename = f"{timestamp}_{str(uuid.uuid4().hex[:8])}_{filename}"
+            
+            # 确定保存路径
+            year_month = datetime.now().strftime('%Y%m')
+            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], year_month)
+            
+            print(f"上传路径: {upload_path}")
+            
+            if not os.path.exists(upload_path):
+                os.makedirs(upload_path)
+            
+            file_path = os.path.join(upload_path, unique_filename)
+            
+            # 保存文件
+            file.save(file_path)
+            print(f"文件已保存到: {file_path}")
+            
+            # 返回文件URL
+            file_url = url_for('static', filename=f'uploads/{year_month}/{unique_filename}')
+            print(f"图片URL: {file_url}")
+            
+            return jsonify({'url': file_url})
+        else:
+            print(f"不支持的文件类型: {file.filename}")
+            return jsonify({'error': f'不支持的文件类型: {file.filename}'}), 400
+    except Exception as e:
+        print(f"图片上传异常: {str(e)}")
+        return jsonify({'error': f'上传图片时发生错误: {str(e)}'}), 500
 
 def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -914,4 +928,9 @@ def inject_now():
     return {'now': datetime.now()}
 
 if __name__ == '__main__':
+    # 打印当前工作目录和上传目录信息
+    print(f"当前工作目录: {os.getcwd()}")
+    print(f"上传目录配置: {app.config['UPLOAD_FOLDER']}")
+    print(f"上传目录是否存在: {os.path.exists(app.config['UPLOAD_FOLDER'])}")
+    
     app.run(debug=True)
