@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block title %}首页 - 个人笔记博客{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 左侧边栏：分类和标签 -->
+    <div class="col-md-3 mb-4">
+        {% if current_user.is_authenticated %}
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">分类</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush category-list">
+                    <li class="list-group-item">
+                        <a href="{{ url_for('index') }}" class="text-decoration-none">全部笔记</a>
+                    </li>
+                    {% for category in categories %}
+                    <li class="list-group-item {% if category.parent_id %}ms-3{% endif %}">
+                        <a href="{{ url_for('index', category=category.id) }}" class="text-decoration-none">
+                            {{ category.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('manage_categories') }}" class="btn btn-sm btn-outline-primary">管理分类</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">标签云</h5>
+            </div>
+            <div class="card-body">
+                <div class="tag-cloud">
+                    {% for tag in tags %}
+                    {% set size = tag_counts[tag.id] %}
+                    {% if size > 0 %}
+                    <a href="{{ url_for('index', tag=tag.id) }}" 
+                       class="tag-item tag-size-{{ min(size, 5) }}">
+                        #{{ tag.name }}
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">日期筛选</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group">
+                    <a href="{{ url_for('index') }}" class="list-group-item list-group-item-action">全部时间</a>
+                    <a href="{{ url_for('index', date_range='week') }}" class="list-group-item list-group-item-action">最近一周</a>
+                    <a href="{{ url_for('index', date_range='month') }}" class="list-group-item list-group-item-action">最近一个月</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧内容：笔记列表 -->
+    <div class="col-md-9">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{% if request.args.get('search') %}搜索结果{% else %}笔记列表{% endif %}</h1>
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('edit_note') }}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-1"></i>新建笔记
+            </a>
+            {% endif %}
+        </div>
+
+        {% if request.args.get('search') %}
+        <div class="alert alert-info">
+            搜索关键词: <strong>{{ request.args.get('search') }}</strong>
+            <a href="{{ url_for('index') }}" class="float-end">清除搜索</a>
+        </div>
+        {% endif %}
+
+        {% if notes %}
+        <div class="row row-cols-1 g-4">
+            {% for note in notes %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="card-title">
+                                <a href="{{ url_for('view_note', note_id=note.id) }}" class="text-decoration-none">
+                                    {{ note.title }}
+                                </a>
+                            </h5>
+                            {% if note.is_public %}
+                            <span class="badge bg-success">公开</span>
+                            {% else %}
+                            <span class="badge bg-secondary">私密</span>
+                            {% endif %}
+                        </div>
+                        
+                        <p class="card-text text-muted">
+                            <small>
+                                创建于: {{ note.created_at.strftime('%Y-%m-%d %H:%M') }} | 
+                                修改于: {{ note.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% if note.category %}
+                                | 分类: <a href="{{ url_for('index', category=note.category.id) }}" class="text-decoration-none">{{ note.category.name }}</a>
+                                {% endif %}
+                            </small>
+                        </p>
+                        
+                        <!-- 笔记摘要 -->
+                        <p class="card-text">
+                            {{ note.content[:150] + '...' if note.content|length > 150 else note.content }}
+                        </p>
+                        
+                        <!-- 标签 -->
+                        <div class="note-tags mb-2">
+                            {% for note_tag in note.note_tags %}
+                            <a href="{{ url_for('index', tag=note_tag.tag.id) }}" class="badge bg-primary text-decoration-none">
+                                {{ note_tag.tag.name }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    {% if current_user.is_authenticated and note.user_id == current_user.id %}
+                    <div class="card-footer bg-transparent">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{{ url_for('edit_note', note_id=note.id) }}" class="btn btn-outline-primary">
+                                <i class="fas fa-edit me-1"></i>编辑
+                            </a>
+                            <a href="{{ url_for('note_history', note_id=note.id) }}" class="btn btn-outline-info">
+                                <i class="fas fa-history me-1"></i>历史
+                            </a>
+                            <button type="button" class="btn btn-outline-danger" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteModal{{ note.id }}">
+                                <i class="fas fa-trash-alt me-1"></i>删除
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 删除确认对话框 -->
+                    <div class="modal fade" id="deleteModal{{ note.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">确认删除</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    确定要删除"{{ note.title }}"这篇笔记吗？此操作不可恢复。
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                    <form action="{{ url_for('delete_note', note_id=note.id) }}" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger">确认删除</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            {% if request.args.get('search') %}
+            没有找到符合条件的笔记。<a href="{{ url_for('index') }}">查看所有笔记</a>
+            {% else %}
+            暂无笔记。{% if current_user.is_authenticated %}<a href="{{ url_for('edit_note') }}">创建第一篇笔记</a>{% endif %}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tag-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .tag-item {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        color: #0d6efd;
+        text-decoration: none;
+        background-color: #e9ecef;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+    }
+    .tag-item:hover {
+        background-color: #0d6efd;
+        color: #fff;
+    }
+    .note-tags .badge {
+        margin-right: 0.25rem;
+    }
+    .tag-size-1 { font-size: 0.8rem; }
+    .tag-size-2 { font-size: 1rem; }
+    .tag-size-3 { font-size: 1.2rem; }
+    .tag-size-4 { font-size: 1.4rem; }
+    .tag-size-5 { font-size: 1.6rem; }
+</style>
+{% endblock %} 

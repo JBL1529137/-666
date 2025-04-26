@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+
+{% block title %}笔记历史 - {{ note.title }} - 个人笔记博客{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>笔记历史记录</h1>
+            <div>
+                <a href="{{ url_for('view_note', note_id=note.id) }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left me-1"></i>返回笔记
+                </a>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">笔记详情</h5>
+            </div>
+            <div class="card-body">
+                <h3>{{ note.title }}</h3>
+                <p class="text-muted">
+                    创建于: {{ note.created_at.strftime('%Y-%m-%d %H:%M') }} | 
+                    上次修改: {{ note.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                    {% if note.category %}
+                    | 分类: {{ note.category.name }}
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        
+        <!-- 版本列表 -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">版本历史</h5>
+            </div>
+            <div class="card-body">
+                {% if versions %}
+                <div class="mb-3">
+                    <form action="{{ url_for('compare_versions') }}" method="get" id="compare-form">
+                        <input type="hidden" name="note_id" value="{{ note.id }}">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="me-2">版本比较：</span>
+                            <button type="submit" class="btn btn-sm btn-outline-primary ms-2" id="compare-btn" disabled>
+                                <i class="fas fa-exchange-alt me-1"></i>比较选中版本
+                            </button>
+                        </div>
+                        <div class="text-muted small mb-3">选择两个版本进行比较，或选择一个版本与当前版本比较</div>
+                    </form>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>比较</th>
+                                <th>版本号</th>
+                                <th>保存时间</th>
+                                <th>保存类型</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- 当前版本 -->
+                            <tr>
+                                <td>
+                                    <div class="form-check">
+                                        <input class="form-check-input version-select" type="radio" 
+                                               name="new" value="current" id="version-current">
+                                    </div>
+                                </td>
+                                <td>当前版本</td>
+                                <td>{{ note.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td><span class="badge bg-success">当前</span></td>
+                                <td>
+                                    <a href="{{ url_for('view_note', note_id=note.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye me-1"></i>查看
+                                    </a>
+                                </td>
+                            </tr>
+                            
+                            <!-- 历史版本 -->
+                            {% for version in versions %}
+                            <tr>
+                                <td>
+                                    <div class="form-check">
+                                        <input class="form-check-input version-select" type="radio" 
+                                               name="old" value="{{ version.id }}" id="version-{{ version.id }}">
+                                    </div>
+                                </td>
+                                <td>版本 {{ version.version_number }}</td>
+                                <td>{{ version.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    {% if version.save_type == 'auto' %}
+                                    <span class="badge bg-secondary">自动保存</span>
+                                    {% else %}
+                                    <span class="badge bg-primary">手动保存</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('view_note_version', version_id=version.id) }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-eye me-1"></i>查看
+                                        </a>
+                                        <button type="button" class="btn btn-outline-success" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#restoreModal{{ version.id }}">
+                                            <i class="fas fa-undo me-1"></i>恢复
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- 恢复确认对话框 -->
+                                    <div class="modal fade" id="restoreModal{{ version.id }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">确认恢复</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    确定要将笔记恢复到版本 {{ version.version_number }}（{{ version.created_at.strftime('%Y-%m-%d %H:%M:%S') }}）吗？
+                                                    <p class="text-danger mt-2">注意：当前版本将被保存为历史记录，恢复操作不可撤销。</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                                    <form action="{{ url_for('restore_note_version', version_id=version.id) }}" method="post">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-success">确认恢复</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    暂无历史版本记录。当笔记被编辑时，系统会自动保存历史版本。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 操作历史 -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">操作记录</h5>
+            </div>
+            <div class="card-body">
+                {% if changes %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>操作类型</th>
+                                <th>用户</th>
+                                <th>详细信息</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for change in changes %}
+                            <tr>
+                                <td>{{ change.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>
+                                    {% if change.change_type == 'create' %}
+                                    <span class="badge bg-success">创建</span>
+                                    {% elif change.change_type == 'edit' %}
+                                    <span class="badge bg-primary">编辑</span>
+                                    {% elif change.change_type == 'delete' %}
+                                    <span class="badge bg-danger">删除</span>
+                                    {% elif change.change_type == 'restore' %}
+                                    <span class="badge bg-warning">恢复</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ change.change_type }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ change.user.username }}</td>
+                                <td>{{ change.details or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">暂无操作记录。</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化版本选择
+        const versionSelects = document.querySelectorAll('.version-select');
+        const compareBtn = document.getElementById('compare-btn');
+        const compareForm = document.getElementById('compare-form');
+        
+        // 计数选中的单选按钮
+        let checkedOld = false;
+        let checkedNew = false;
+        
+        // 监听单选按钮变化
+        versionSelects.forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                // 更新计数
+                if (this.name === 'old') {
+                    checkedOld = true;
+                } else if (this.name === 'new') {
+                    checkedNew = true;
+                }
+                
+                // 如果至少选择了一个旧版本，则启用比较按钮
+                compareBtn.disabled = !checkedOld;
+                
+                // 如果只选择了一个旧版本，默认与当前版本比较
+                if (checkedOld && !checkedNew) {
+                    const currentVersion = document.getElementById('version-current');
+                    if (currentVersion) {
+                        currentVersion.checked = true;
+                        checkedNew = true;
+                    }
+                }
+            });
+        });
+        
+        // 表单提交前处理
+        compareForm.addEventListener('submit', function(e) {
+            // 如果没有选择旧版本，阻止提交
+            if (!checkedOld) {
+                e.preventDefault();
+                alert('请至少选择一个要比较的版本');
+            }
+        });
+    });
+</script>
+{% endblock %} 

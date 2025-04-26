@@ -1,0 +1,337 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if note %}编辑笔记{% else %}新建笔记{% endif %} - 个人笔记博客{% endblock %}
+
+{% block extra_css %}
+<!-- SimpleMDE - Markdown编辑器 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css">
+<style>
+    .editor-toolbar {
+        border-radius: 0.25rem 0.25rem 0 0;
+    }
+    .CodeMirror {
+        height: 500px;
+        border-radius: 0 0 0.25rem 0.25rem;
+    }
+    .preview-area {
+        height: 500px;
+        overflow-y: auto;
+        padding: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 0.25rem;
+    }
+    .select2-container {
+        width: 100% !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{% if note %}编辑笔记{% else %}新建笔记{% endif %}</h1>
+        
+        <form method="post" id="note-form" action="{% if note %}{{ url_for('edit_note', note_id=note.id) }}{% else %}{{ url_for('edit_note') }}{% endif %}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if note %}
+            <input type="hidden" name="note_id" value="{{ note.id }}" id="note-id">
+            {% endif %}
+            
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <div class="form-floating mb-3">
+                        <input type="text" class="form-control" id="title" name="title" placeholder="笔记标题" 
+                               value="{{ note.title if note else '' }}" required>
+                        <label for="title">笔记标题</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-floating mb-3">
+                        <select class="form-select" id="category_id" name="category_id">
+                            <option value="">-- 选择分类 --</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}" 
+                                {% if note and note.category_id == category.id %}selected{% endif %}>
+                                {% if category.parent %}{{ category.parent.name }} &gt; {% endif %}{{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <label for="category_id">分类</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <label class="form-label">标签</label>
+                    <select class="form-control select2-tags" name="tags" multiple="multiple" id="tags">
+                        {% for tag in all_tags %}
+                        <option value="{{ tag.name }}" 
+                            {% if note and note.note_tags %}
+                                {% set selected = false %}
+                                {% for nt in note.note_tags %}
+                                    {% if tag.id == nt.tag.id %}
+                                        {% set selected = true %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if selected %}selected{% endif %}
+                            {% endif %}>
+                            {{ tag.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">输入标签名称并按Enter添加，可添加多个标签</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check form-switch mt-4">
+                        <input class="form-check-input" type="checkbox" role="switch" id="is_public" name="is_public" 
+                               {% if note and note.is_public %}checked{% endif %}>
+                        <label class="form-check-label" for="is_public">公开笔记</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="content" class="form-label">笔记内容（Markdown格式）</label>
+                    <textarea class="form-control" id="content" name="content" rows="15" 
+                              required>{{ note.content if note else '' }}</textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">实时预览</label>
+                    <div class="preview-area" id="preview"></div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between">
+                <div>
+                    <button type="submit" class="btn btn-primary" id="save-note-btn">
+                        <i class="fas fa-save me-1"></i>保存笔记
+                    </button>
+                    <a href="{% if note %}{{ url_for('view_note', note_id=note.id) }}{% else %}{{ url_for('index') }}{% endif %}" 
+                       class="btn btn-outline-secondary ms-2">
+                        取消
+                    </a>
+                </div>
+                <div class="autosave-status" id="autosave-status"></div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 图片上传对话框 -->
+<div class="modal fade" id="imageUploadModal" tabindex="-1" aria-labelledby="imageUploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageUploadModalLabel">上传图片</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="image-upload-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="image-file" class="form-label">选择图片文件</label>
+                        <input class="form-control" type="file" id="image-file" accept="image/*" required>
+                    </div>
+                </form>
+                <div class="alert alert-info d-none" id="upload-status"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="upload-image-btn">上传</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- SimpleMDE - Markdown编辑器 -->
+<script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
+<!-- Select2 -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+<!-- Marked - Markdown解析器 -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- DOMPurify - 防XSS攻击 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.4/purify.min.js"></script>
+<script>
+    // 初始化Select2
+    $(document).ready(function() {
+        $('.select2-tags').select2({
+            tags: true,
+            tokenSeparators: [',', ' '],
+            placeholder: "添加标签"
+        });
+        
+        // 表单提交监听
+        $('#note-form').on('submit', function(e) {
+            console.log('表单提交事件触发');
+            return true; // 允许表单正常提交
+        });
+        
+        // 保存按钮点击监听
+        $('#save-note-btn').on('click', function() {
+            console.log('保存按钮被点击');
+            $('#note-form').submit();
+        });
+    });
+    
+    // 初始化Markdown编辑器
+    var simplemde = new SimpleMDE({
+        element: document.getElementById("content"),
+        spellChecker: false,
+        autosave: {
+            enabled: false
+        },
+        toolbar: [
+            "bold", "italic", "strikethrough", "heading", "|",
+            "code", "quote", "unordered-list", "ordered-list", "|", 
+            "link", 
+            {
+                name: "image",
+                action: function customImage(editor) {
+                    $('#imageUploadModal').modal('show');
+                },
+                className: "fa fa-picture-o",
+                title: "插入图片",
+            },
+            "table", "|",
+            "preview", "side-by-side", "fullscreen", "|",
+            "guide"
+        ],
+        status: ["autosave", "lines", "words", "cursor"]
+    });
+    
+    // 实时预览
+    simplemde.codemirror.on("change", function() {
+        var content = simplemde.value();
+        var html = marked.parse(content);
+        var sanitizedHtml = DOMPurify.sanitize(html);
+        document.getElementById('preview').innerHTML = sanitizedHtml;
+        
+        // 自动保存 - 仅对已有笔记执行
+        var noteIdElement = document.getElementById('note-id');
+        if(noteIdElement) {
+            autoSaveNote();
+        }
+    });
+    
+    // 初始触发一次预览更新
+    setTimeout(function() {
+        var content = simplemde.value();
+        var html = marked.parse(content);
+        var sanitizedHtml = DOMPurify.sanitize(html);
+        document.getElementById('preview').innerHTML = sanitizedHtml;
+    }, 500);
+    
+    // 自动保存功能
+    var autoSaveTimeout;
+    function autoSaveNote() {
+        clearTimeout(autoSaveTimeout);
+        document.getElementById('autosave-status').textContent = "正在保存...";
+        
+        autoSaveTimeout = setTimeout(function() {
+            // 检查note-id元素是否存在（新建笔记时不存在）
+            var noteIdElement = document.getElementById('note-id');
+            if (!noteIdElement) {
+                document.getElementById('autosave-status').textContent = "";
+                return;
+            }
+            
+            var noteId = noteIdElement.value;
+            var title = document.getElementById('title').value;
+            var content = simplemde.value();
+            
+            if (!noteId || !title || !content) {
+                document.getElementById('autosave-status').textContent = "";
+                return;
+            }
+            
+            $.ajax({
+                url: '{{ url_for("autosave_note") }}',
+                type: 'POST',
+                data: {
+                    note_id: noteId,
+                    title: title,
+                    content: content,
+                    csrf_token: '{{ csrf_token() }}'
+                },
+                success: function(response) {
+                    document.getElementById('autosave-status').textContent = "已自动保存";
+                    setTimeout(function() {
+                        document.getElementById('autosave-status').textContent = "";
+                    }, 2000);
+                },
+                error: function() {
+                    document.getElementById('autosave-status').textContent = "自动保存失败";
+                }
+            });
+        }, 1000);
+    }
+    
+    // 图片上传
+    document.getElementById('upload-image-btn').addEventListener('click', function() {
+        var fileInput = document.getElementById('image-file');
+        var statusDiv = document.getElementById('upload-status');
+        
+        if (!fileInput || !fileInput.files.length) {
+            statusDiv.textContent = "请选择一个图片文件";
+            statusDiv.classList.remove('d-none');
+            statusDiv.classList.remove('alert-success');
+            statusDiv.classList.add('alert-danger');
+            return;
+        }
+        
+        var file = fileInput.files[0];
+        var formData = new FormData();
+        formData.append('image', file);
+        formData.append('csrf_token', '{{ csrf_token() }}');
+        
+        statusDiv.textContent = "正在上传...";
+        statusDiv.classList.remove('d-none');
+        statusDiv.classList.remove('alert-danger');
+        statusDiv.classList.add('alert-info');
+        
+        $.ajax({
+            url: '{{ url_for("upload_image") }}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                // 插入图片链接到编辑器
+                var imageUrl = response.url;
+                var cm = simplemde.codemirror;
+                var output = '![' + file.name + '](' + imageUrl + ')';
+                cm.replaceSelection(output);
+                
+                // 关闭对话框
+                $('#imageUploadModal').modal('hide');
+                
+                // 重置表单
+                document.getElementById('image-upload-form').reset();
+                statusDiv.classList.add('d-none');
+            },
+            error: function(xhr) {
+                var errorMessage = "上传失败";
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMessage = xhr.responseJSON.error;
+                }
+                statusDiv.textContent = errorMessage;
+                statusDiv.classList.remove('alert-info');
+                statusDiv.classList.add('alert-danger');
+            }
+        });
+    });
+    
+    // 快捷键：Ctrl+S 保存
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            console.log('触发Ctrl+S表单提交');
+            $('#note-form').submit();
+        }
+    });
+</script>
+{% endblock %} 

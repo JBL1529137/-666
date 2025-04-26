@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+
+{% block title %}版本对比 - {{ note.title }} - 个人笔记博客{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/styles/github.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css">
+<style>
+    .version-info {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        margin-bottom: 1rem;
+    }
+    .compare-header {
+        background-color: #e9ecef;
+        padding: 0.75rem;
+        border-radius: 0.25rem;
+        margin-bottom: 1rem;
+    }
+    .diff-wrapper {
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+        overflow: hidden;
+    }
+    .version-badge {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .version-auto {
+        background-color: #6c757d;
+        color: white;
+    }
+    .version-manual {
+        background-color: #0d6efd;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>版本对比</h1>
+            <div>
+                <a href="{{ url_for('note_history', note_id=note.id) }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left me-1"></i>返回历史记录
+                </a>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">笔记详情</h5>
+            </div>
+            <div class="card-body">
+                <h3>{{ note.title }}</h3>
+                <p class="text-muted">
+                    创建于: {{ note.created_at.strftime('%Y-%m-%d %H:%M') }} | 
+                    上次修改: {{ note.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                </p>
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">比较的版本</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="version-info">
+                            <h5>旧版本 
+                                <span class="badge version-badge {% if old_version.save_type == 'auto' %}version-auto{% else %}version-manual{% endif %}">
+                                    {{ '自动保存' if old_version.save_type == 'auto' else '手动保存' }}
+                                </span>
+                            </h5>
+                            <p>版本号: {{ old_version.version_number }}</p>
+                            <p>保存时间: {{ old_version.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="version-info">
+                            <h5>新版本
+                                <span class="badge version-badge {% if new_version.save_type == 'auto' %}version-auto{% else %}version-manual{% endif %}">
+                                    {{ '自动保存' if new_version.save_type == 'auto' else '手动保存' }}
+                                </span>
+                            </h5>
+                            <p>版本号: {{ new_version.version_number or '当前版本' }}</p>
+                            <p>保存时间: {{ new_version.created_at.strftime('%Y-%m-%d %H:%M:%S') if new_version.created_at else note.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="compare-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-success me-2">+ 添加</span>
+                        <span class="badge bg-danger me-2">- 删除</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary" id="view-unified">统一视图</button>
+                        <button class="btn btn-sm btn-outline-secondary active" id="view-split">拆分视图</button>
+                    </div>
+                </div>
+                
+                <div class="diff-wrapper">
+                    <div id="diff-container"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="d-flex justify-content-between">
+            <div>
+                <a href="{{ url_for('note_history', note_id=note.id) }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>返回历史记录
+                </a>
+            </div>
+            <div>
+                {% if old_version %}
+                <form action="{{ url_for('restore_note_version', version_id=old_version.id) }}" method="post" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success" onclick="return confirm('确定要将笔记恢复到版本 {{ old_version.version_number }} 吗？')">
+                        <i class="fas fa-undo me-1"></i>恢复到此版本
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html-ui.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 准备差异数据
+        const oldContent = {{ old_content|tojson }};
+        const newContent = {{ new_content|tojson }};
+        
+        // 生成差异
+        const diffString = generateUnifiedDiff(oldContent, newContent);
+        const diffOutput = Diff2Html.parse(diffString);
+        
+        // 初始化差异视图
+        const diffContainer = document.getElementById('diff-container');
+        const configuration = {
+            drawFileList: false,
+            matching: 'lines',
+            outputFormat: 'side-by-side',
+            renderNothingWhenEmpty: false,
+            highlight: true,
+            fileContentToggle: false
+        };
+        
+        const diff2htmlUi = new Diff2HtmlUI(diffContainer, diffOutput, configuration);
+        diff2htmlUi.draw();
+        diff2htmlUi.highlightCode();
+        
+        // 视图切换按钮
+        document.getElementById('view-unified').addEventListener('click', function() {
+            this.classList.add('active');
+            document.getElementById('view-split').classList.remove('active');
+            configuration.outputFormat = 'line-by-line';
+            diff2htmlUi.draw();
+            diff2htmlUi.highlightCode();
+        });
+        
+        document.getElementById('view-split').addEventListener('click', function() {
+            this.classList.add('active');
+            document.getElementById('view-unified').classList.remove('active');
+            configuration.outputFormat = 'side-by-side';
+            diff2htmlUi.draw();
+            diff2htmlUi.highlightCode();
+        });
+        
+        // 生成统一差异格式
+        function generateUnifiedDiff(oldStr, newStr) {
+            const oldLines = oldStr.split('\n');
+            const newLines = newStr.split('\n');
+            
+            const header = '--- old\n+++ new\n@@ -1,' + oldLines.length + ' +1,' + newLines.length + ' @@\n';
+            const oldPrefix = oldLines.map(line => '-' + line).join('\n');
+            const newPrefix = newLines.map(line => '+' + line).join('\n');
+            
+            return header + oldPrefix + '\n' + newPrefix;
+        }
+    });
+</script>
+{% endblock %} 

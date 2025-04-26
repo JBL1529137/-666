@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+
+{% block title %}数据恢复 - 个人笔记博客{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>数据恢复</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-1"></i>返回首页
+            </a>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">从备份文件恢复数据</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h5 class="alert-heading">重要提示</h5>
+                    <p>请选择之前备份的JSON文件进行数据恢复。</p>
+                    <hr>
+                    <p class="mb-0">
+                        注意：恢复操作会根据您选择的恢复模式处理重复笔记。请确保备份文件来源可靠。
+                    </p>
+                </div>
+                
+                <form method="post" enctype="multipart/form-data" id="restore-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-3">
+                        <label for="backup_file" class="form-label">选择备份文件</label>
+                        <input class="form-control" type="file" id="backup_file" name="backup_file" accept=".json" required>
+                        <div class="form-text">请选择.json格式的备份文件</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">恢复模式</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="restore_mode" id="mode-add" value="add" checked>
+                            <label class="form-check-label" for="mode-add">
+                                仅添加新内容 - 当有同名笔记时，跳过恢复
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="restore_mode" id="mode-overwrite" value="overwrite">
+                            <label class="form-check-label" for="mode-overwrite">
+                                覆盖现有内容 - 当有同名笔记时，用备份内容替换
+                            </label>
+                        </div>
+                        <div class="form-text text-warning" id="overwrite-warning" style="display: none;">
+                            <i class="fas fa-exclamation-triangle me-1"></i>警告：覆盖模式可能会导致现有数据丢失
+                        </div>
+                    </div>
+                    
+                    <div id="preview-container" style="display: none;" class="mb-3">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">备份文件预览</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>备份日期：</strong> <span id="backup-date"></span></p>
+                                        <p><strong>用户名：</strong> <span id="backup-username"></span></p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>笔记数量：</strong> <span id="backup-note-count"></span></p>
+                                        <p><strong>分类数量：</strong> <span id="backup-category-count"></span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-1"></i>开始恢复
+                        </button>
+                        <a href="{{ url_for('backup_data_route') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-download me-1"></i>或者先备份当前数据
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">恢复说明</h5>
+            </div>
+            <div class="card-body">
+                <h5>备份文件内容</h5>
+                <p>备份文件包含以下数据：</p>
+                <ul>
+                    <li>笔记标题与内容</li>
+                    <li>笔记分类</li>
+                    <li>笔记标签</li>
+                    <li>创建和修改时间</li>
+                    <li>笔记可见性设置</li>
+                </ul>
+                
+                <h5>恢复流程</h5>
+                <ol>
+                    <li>上传之前下载的备份文件（JSON格式）</li>
+                    <li>选择恢复模式（仅添加新内容或覆盖现有内容）</li>
+                    <li>查看文件预览，确认是您要恢复的正确数据</li>
+                    <li>点击"开始恢复"按钮，系统将解析文件并导入数据</li>
+                    <li>恢复完成后，您可以在笔记列表中查看恢复的笔记</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 恢复模式切换
+        const modeAdd = document.getElementById('mode-add');
+        const modeOverwrite = document.getElementById('mode-overwrite');
+        const overwriteWarning = document.getElementById('overwrite-warning');
+        
+        function updateWarning() {
+            overwriteWarning.style.display = modeOverwrite.checked ? 'block' : 'none';
+        }
+        
+        modeAdd.addEventListener('change', updateWarning);
+        modeOverwrite.addEventListener('change', updateWarning);
+        
+        // 文件预览
+        const fileInput = document.getElementById('backup_file');
+        const previewContainer = document.getElementById('preview-container');
+        const backupDate = document.getElementById('backup-date');
+        const backupUsername = document.getElementById('backup-username');
+        const backupNoteCount = document.getElementById('backup-note-count');
+        const backupCategoryCount = document.getElementById('backup-category-count');
+        
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                const file = this.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        const metadata = data.metadata || {};
+                        
+                        // 更新预览信息
+                        backupDate.textContent = new Date(metadata.timestamp || Date.now()).toLocaleString();
+                        backupUsername.textContent = metadata.username || '未知用户';
+                        backupNoteCount.textContent = metadata.note_count || data.notes?.length || '未知';
+                        backupCategoryCount.textContent = data.categories?.length || '未知';
+                        
+                        // 显示预览
+                        previewContainer.style.display = 'block';
+                    } catch (error) {
+                        console.error('解析备份文件失败', error);
+                        alert('备份文件格式错误，请选择有效的备份文件');
+                        previewContainer.style.display = 'none';
+                    }
+                };
+                
+                reader.readAsText(file);
+            } else {
+                previewContainer.style.display = 'none';
+            }
+        });
+        
+        // 表单提交验证
+        document.getElementById('restore-form').addEventListener('submit', function(e) {
+            if (!fileInput.files.length) {
+                e.preventDefault();
+                alert('请选择一个备份文件');
+            }
+            
+            if (modeOverwrite.checked) {
+                if (!confirm('您选择了覆盖模式，这可能会替换已有的笔记内容。确定要继续吗？')) {
+                    e.preventDefault();
+                }
+            }
+        });
+    });
+</script>
+{% endblock %} 

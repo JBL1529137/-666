@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+
+{% block title %}数据备份 - 个人笔记博客{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>数据备份</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-1"></i>返回首页
+            </a>
+        </div>
+
+        <div class="row mb-4">
+            <!-- 手动备份 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">手动备份</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" id="backup-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">备份范围</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="backup_scope" id="scope-all" value="all" checked>
+                                    <label class="form-check-label" for="scope-all">
+                                        全部笔记 ({{ note_count }} 条)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="backup_scope" id="scope-category" value="category">
+                                    <label class="form-check-label" for="scope-category">
+                                        按分类备份
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3" id="category-select-container" style="display: none;">
+                                <label for="category_id" class="form-label">选择分类</label>
+                                <select class="form-select" id="category_id" name="category_id">
+                                    <option value="">-- 选择分类 --</option>
+                                    {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="date-filter" name="date_filter">
+                                    <label class="form-check-label" for="date-filter">
+                                        按日期范围筛选
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="row mb-3" id="date-range-container" style="display: none;">
+                                <div class="col-md-6">
+                                    <label for="date_from" class="form-label">开始日期</label>
+                                    <input type="date" class="form-control" id="date_from" name="date_from">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="date_to" class="form-label">结束日期</label>
+                                    <input type="date" class="form-control" id="date_to" name="date_to">
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-download me-1"></i>下载备份文件
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 备份说明 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">备份说明</h5>
+                    </div>
+                    <div class="card-body">
+                        <h5>备份内容</h5>
+                        <p>备份文件包含以下数据：</p>
+                        <ul>
+                            <li>笔记标题与内容</li>
+                            <li>笔记分类</li>
+                            <li>笔记标签</li>
+                            <li>创建和修改时间</li>
+                            <li>笔记可见性设置</li>
+                        </ul>
+                        
+                        <h5>备份建议</h5>
+                        <ul>
+                            <li>定期手动备份重要笔记</li>
+                            <li>系统每周会自动创建一次完整备份</li>
+                            <li>将备份文件保存在安全的位置</li>
+                            <li>导出的备份为JSON格式，便于数据迁移</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 自动备份列表 -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">系统自动备份</h5>
+            </div>
+            <div class="card-body">
+                {% if auto_backups %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>备份文件</th>
+                                <th>创建时间</th>
+                                <th>文件大小</th>
+                                <th>笔记数量</th>
+                                <th>备份类型</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for backup in auto_backups %}
+                            <tr>
+                                <td>{{ backup.filename }}</td>
+                                <td>{{ backup.date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ backup.size }}</td>
+                                <td>{{ backup.note_count }}</td>
+                                <td>
+                                    {% if backup.is_auto %}
+                                    <span class="badge bg-info">自动备份</span>
+                                    {% else %}
+                                    <span class="badge bg-success">手动备份</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{{ url_for('download_auto_backup', filename=backup.filename) }}" class="btn btn-outline-primary">
+                                            <i class="fas fa-download me-1"></i>下载
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#deleteBackupModal{{ loop.index }}">
+                                            <i class="fas fa-trash-alt me-1"></i>删除
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- 删除确认对话框 -->
+                                    <div class="modal fade" id="deleteBackupModal{{ loop.index }}" tabindex="-1" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">确认删除</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    确定要删除备份文件 "{{ backup.filename }}" 吗？此操作不可恢复。
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                                    <form action="{{ url_for('delete_auto_backup', filename=backup.filename) }}" method="post">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-danger">确认删除</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    暂无系统自动备份。系统会定期自动创建备份，您也可以手动创建备份。
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 分类选择显示逻辑
+        const scopeAll = document.getElementById('scope-all');
+        const scopeCategory = document.getElementById('scope-category');
+        const categoryContainer = document.getElementById('category-select-container');
+        
+        scopeAll.addEventListener('change', function() {
+            if (this.checked) {
+                categoryContainer.style.display = 'none';
+            }
+        });
+        
+        scopeCategory.addEventListener('change', function() {
+            if (this.checked) {
+                categoryContainer.style.display = 'block';
+            }
+        });
+        
+        // 日期范围显示逻辑
+        const dateFilter = document.getElementById('date-filter');
+        const dateRangeContainer = document.getElementById('date-range-container');
+        
+        dateFilter.addEventListener('change', function() {
+            dateRangeContainer.style.display = this.checked ? 'flex' : 'none';
+        });
+        
+        // 表单提交验证
+        document.getElementById('backup-form').addEventListener('submit', function(e) {
+            if (scopeCategory.checked) {
+                const categoryId = document.getElementById('category_id').value;
+                if (!categoryId) {
+                    e.preventDefault();
+                    alert('请选择一个分类');
+                }
+            }
+            
+            if (dateFilter.checked) {
+                const dateFrom = document.getElementById('date_from').value;
+                const dateTo = document.getElementById('date_to').value;
+                
+                if (!dateFrom || !dateTo) {
+                    e.preventDefault();
+                    alert('请选择完整的日期范围');
+                }
+            }
+        });
+    });
+</script>
+{% endblock %} 

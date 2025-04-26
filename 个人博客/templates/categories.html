@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+
+{% block title %}分类管理 - 个人笔记博客{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.css">
+<style>
+    .category-item {
+        cursor: move;
+    }
+    .category-item .category-drag-handle {
+        cursor: move;
+        padding: 0.25rem;
+    }
+    .category-item.child-category {
+        margin-left: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>分类管理</h1>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+                <i class="fas fa-plus-circle me-1"></i>新建分类
+            </button>
+        </div>
+        
+        {% if categories %}
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">分类列表</h5>
+                <button type="button" class="btn btn-sm btn-light" id="save-order" style="display: none;">
+                    <i class="fas fa-save me-1"></i>保存排序
+                </button>
+            </div>
+            <div class="card-body">
+                <ul class="list-group" id="sortable-categories">
+                    {% for category in categories %}
+                    {% if not category.parent_id %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center category-item" data-id="{{ category.id }}">
+                        <div class="d-flex align-items-center">
+                            <span class="category-drag-handle me-2"><i class="fas fa-grip-vertical text-muted"></i></span>
+                            <span>{{ category.name }}</span>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-primary edit-category-btn" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#editCategoryModal" 
+                                    data-id="{{ category.id }}" 
+                                    data-name="{{ category.name }}" 
+                                    data-parent="{{ category.parent_id or '' }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger delete-category-btn" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteCategoryModal" 
+                                    data-id="{{ category.id }}" 
+                                    data-name="{{ category.name }}">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </li>
+                    
+                    <!-- 子分类 -->
+                    {% for child in categories %}
+                    {% if child.parent_id == category.id %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center category-item child-category" 
+                        data-id="{{ child.id }}" data-parent="{{ child.parent_id }}">
+                        <div class="d-flex align-items-center">
+                            <span class="category-drag-handle me-2"><i class="fas fa-grip-vertical text-muted"></i></span>
+                            <span>{{ child.name }}</span>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-outline-primary edit-category-btn" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#editCategoryModal" 
+                                    data-id="{{ child.id }}" 
+                                    data-name="{{ child.name }}" 
+                                    data-parent="{{ child.parent_id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger delete-category-btn" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteCategoryModal" 
+                                    data-id="{{ child.id }}" 
+                                    data-name="{{ child.name }}">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            暂无分类。点击"新建分类"按钮创建第一个分类。
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">分类提示</h5>
+            </div>
+            <div class="card-body">
+                <h5>关于分类</h5>
+                <ul>
+                    <li>分类用于对笔记进行组织，方便快速查找</li>
+                    <li>您可以创建多层级分类，例如"技术学习"下可以有"Python"、"前端"等子分类</li>
+                    <li>拖动分类可以调整显示顺序</li>
+                    <li>分类名称建议简洁明了</li>
+                </ul>
+                <h5>管理方法</h5>
+                <ul>
+                    <li>点击"新建分类"创建新的分类</li>
+                    <li>点击编辑按钮修改分类名称或父级分类</li>
+                    <li>已有笔记的分类无法删除</li>
+                    <li>有子分类的分类无法直接删除</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加分类模态框 -->
+<div class="modal fade" id="addCategoryModal" tabindex="-1" aria-labelledby="addCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addCategoryModalLabel">添加新分类</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('add_category') }}" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="category-name" class="form-label">分类名称</label>
+                        <input type="text" class="form-control" id="category-name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="parent-category" class="form-label">父级分类（可选）</label>
+                        <select class="form-select" id="parent-category" name="parent_id">
+                            <option value="">无父级分类</option>
+                            {% for category in categories %}
+                            {% if not category.parent_id %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">选择一个父级分类可创建子分类</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">添加分类</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑分类模态框 -->
+<div class="modal fade" id="editCategoryModal" tabindex="-1" aria-labelledby="editCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editCategoryModalLabel">编辑分类</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="edit-category-form" action="" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="edit-category-name" class="form-label">分类名称</label>
+                        <input type="text" class="form-control" id="edit-category-name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit-parent-category" class="form-label">父级分类（可选）</label>
+                        <select class="form-select" id="edit-parent-category" name="parent_id">
+                            <option value="">无父级分类</option>
+                            {% for category in categories %}
+                            {% if not category.parent_id %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">选择一个父级分类可创建子分类</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 删除分类确认模态框 -->
+<div class="modal fade" id="deleteCategoryModal" tabindex="-1" aria-labelledby="deleteCategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteCategoryModalLabel">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除分类"<span id="delete-category-name"></span>"吗？</p>
+                <p class="text-danger">注意：已有笔记的分类或有子分类的分类无法删除。</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form id="delete-category-form" action="" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">确认删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化可排序列表
+        var el = document.getElementById('sortable-categories');
+        if (el) {
+            var sortable = new Sortable(el, {
+                handle: '.category-drag-handle',
+                animation: 150,
+                onEnd: function() {
+                    document.getElementById('save-order').style.display = 'block';
+                }
+            });
+        }
+        
+        // 保存排序按钮点击事件
+        document.getElementById('save-order')?.addEventListener('click', function() {
+            var items = document.querySelectorAll('#sortable-categories .category-item');
+            var orderData = {};
+            
+            items.forEach(function(item, index) {
+                orderData[item.dataset.id] = index + 1;
+            });
+            
+            fetch('{{ url_for("reorder_categories") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify(orderData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('save-order').style.display = 'none';
+                    // 页面提示保存成功
+                    alert('分类排序已保存');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('保存排序失败，请重试');
+            });
+        });
+        
+        // 编辑分类按钮点击事件
+        document.querySelectorAll('.edit-category-btn').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var id = this.dataset.id;
+                var name = this.dataset.name;
+                var parent = this.dataset.parent;
+                
+                document.getElementById('edit-category-name').value = name;
+                document.getElementById('edit-category-form').action = "{{ url_for('edit_category', category_id=0) }}".replace('0', id);
+                
+                var parentSelect = document.getElementById('edit-parent-category');
+                for (var i = 0; i < parentSelect.options.length; i++) {
+                    if (parentSelect.options[i].value === parent) {
+                        parentSelect.options[i].selected = true;
+                        break;
+                    }
+                }
+                
+                // 禁用自己作为父级
+                for (var i = 0; i < parentSelect.options.length; i++) {
+                    if (parentSelect.options[i].value === id) {
+                        parentSelect.options[i].disabled = true;
+                    } else {
+                        parentSelect.options[i].disabled = false;
+                    }
+                }
+            });
+        });
+        
+        // 删除分类按钮点击事件
+        document.querySelectorAll('.delete-category-btn').forEach(function(button) {
+            button.addEventListener('click', function() {
+                var id = this.dataset.id;
+                var name = this.dataset.name;
+                
+                document.getElementById('delete-category-name').textContent = name;
+                document.getElementById('delete-category-form').action = "{{ url_for('delete_category', category_id=0) }}".replace('0', id);
+            });
+        });
+    });
+</script>
+{% endblock %} 

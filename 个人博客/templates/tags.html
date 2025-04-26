@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}标签管理 - 个人笔记博客{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>标签管理</h1>
+        </div>
+        
+        {% if tags %}
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">标签列表</h5>
+            </div>
+            <div class="card-body">
+                <div class="tag-cloud mb-4">
+                    {% for tag in tags %}
+                    {% set size = tag_counts[tag.id] %}
+                    {% if size > 0 %}
+                    <a href="{{ url_for('index', tag=tag.id) }}" 
+                       class="tag-item tag-size-{{ min(size, 5) }}">
+                        #{{ tag.name }} ({{ size }})
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>标签名称</th>
+                            <th>使用次数</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tag in tags %}
+                        <tr>
+                            <td>{{ tag.name }}</td>
+                            <td>{{ tag_counts[tag.id] }}</td>
+                            <td>{{ tag.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td>
+                                <a href="{{ url_for('index', tag=tag.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-search"></i> 查看笔记
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            暂无标签。创建或编辑笔记时可以添加标签。
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">标签提示</h5>
+            </div>
+            <div class="card-body">
+                <h5>关于标签</h5>
+                <ul>
+                    <li>标签可以为笔记添加更灵活的分类方式</li>
+                    <li>与严格的分类层级不同，一篇笔记可以有多个标签</li>
+                    <li>标签云中字体越大表示使用该标签的笔记越多</li>
+                    <li>建议使用简短、有意义的词汇作为标签</li>
+                </ul>
+                <h5>使用方法</h5>
+                <ul>
+                    <li>在创建或编辑笔记时添加标签</li>
+                    <li>点击标签可以查看使用该标签的所有笔记</li>
+                    <li>当无笔记使用某标签时，该标签会自动从系统中删除</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tag-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .tag-item {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        color: #0d6efd;
+        text-decoration: none;
+        background-color: #e9ecef;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+    }
+    .tag-item:hover {
+        background-color: #0d6efd;
+        color: #fff;
+    }
+    .tag-size-1 { font-size: 0.8rem; }
+    .tag-size-2 { font-size: 1rem; }
+    .tag-size-3 { font-size: 1.2rem; }
+    .tag-size-4 { font-size: 1.4rem; }
+    .tag-size-5 { font-size: 1.6rem; }
+</style>
+{% endblock %} 

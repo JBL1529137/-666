@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ note.title }} - 个人笔记博客{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/styles/github.min.css">
+<style>
+    .note-content {
+        line-height: 1.6;
+    }
+    .note-content h1, .note-content h2, .note-content h3, 
+    .note-content h4, .note-content h5, .note-content h6 {
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .note-content img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+    }
+    .note-content pre {
+        padding: 1rem;
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+        overflow-x: auto;
+    }
+    .note-content blockquote {
+        padding: 0.5rem 1rem;
+        background-color: #f8f9fa;
+        border-left: 4px solid #0d6efd;
+        margin: 1rem 0;
+    }
+    .note-content table {
+        width: 100%;
+        margin-bottom: 1rem;
+        border-collapse: collapse;
+    }
+    .note-content table th, .note-content table td {
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+    }
+    .note-content table th {
+        background-color: #f8f9fa;
+    }
+    .toc {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        margin-bottom: 1.5rem;
+    }
+    .toc a {
+        text-decoration: none;
+    }
+    .toc ul {
+        padding-left: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-9">
+        <article class="note-full">
+            <header class="mb-4">
+                <h1 class="mb-1">{{ note.title }}</h1>
+                <div class="d-flex justify-content-between align-items-center mt-2 mb-4">
+                    <div class="note-meta text-muted">
+                        <small>
+                            创建于: {{ note.created_at.strftime('%Y-%m-%d %H:%M') }} | 
+                            修改于: {{ note.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                            {% if note.category %}
+                            | 分类: <a href="{{ url_for('index', category=note.category.id) }}" class="text-decoration-none">{{ note.category.name }}</a>
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div>
+                        {% if note.is_public %}
+                        <span class="badge bg-success">公开</span>
+                        {% else %}
+                        <span class="badge bg-secondary">私密</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- 标签 -->
+                <div class="note-tags mb-3">
+                    {% for tag in tags %}
+                    <a href="{{ url_for('index', tag=tag.id) }}" class="badge bg-primary text-decoration-none">
+                        {{ tag.name }}
+                    </a>
+                    {% endfor %}
+                </div>
+                
+                {% if current_user.is_authenticated and note.user_id == current_user.id %}
+                <div class="note-actions mb-4">
+                    <div class="btn-group">
+                        <a href="{{ url_for('edit_note', note_id=note.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-edit me-1"></i>编辑
+                        </a>
+                        <a href="{{ url_for('note_history', note_id=note.id) }}" class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-history me-1"></i>历史版本
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                data-bs-toggle="modal" 
+                                data-bs-target="#deleteModal">
+                            <i class="fas fa-trash-alt me-1"></i>删除
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </header>
+            
+            <!-- 目录导航 -->
+            <div class="toc mb-4" id="toc-container">
+                <h5 class="mb-3">目录</h5>
+                <div id="toc"></div>
+            </div>
+            
+            <!-- 笔记内容 -->
+            <div class="note-content">
+                {{ content_html|safe }}
+            </div>
+        </article>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card sticky-top" style="top: 20px">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">相关操作</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i>返回笔记列表
+                    </a>
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('edit_note') }}" class="btn btn-outline-success">
+                        <i class="fas fa-plus-circle me-1"></i>创建新笔记
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 删除确认对话框 -->
+{% if current_user.is_authenticated and note.user_id == current_user.id %}
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">确认删除</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                确定要删除"{{ note.title }}"这篇笔记吗？此操作不可恢复。
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <form action="{{ url_for('delete_note', note_id=note.id) }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">确认删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/highlight.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 代码高亮
+        document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightBlock(block);
+        });
+        
+        // 生成目录
+        var headings = document.querySelectorAll('.note-content h1, .note-content h2, .note-content h3, .note-content h4');
+        var toc = document.getElementById('toc');
+        var tocContainer = document.getElementById('toc-container');
+        
+        if (headings.length > 0) {
+            var tocHtml = '<ul>';
+            var prevLevel = 1;
+            
+            headings.forEach(function(heading, index) {
+                var level = parseInt(heading.tagName.substr(1));
+                
+                // 确保在DOM中有ID，若没有则创建一个
+                if (!heading.id) {
+                    heading.id = 'heading-' + index;
+                }
+                
+                // 处理缩进
+                if (level > prevLevel) {
+                    tocHtml += '<ul>';
+                } else if (level < prevLevel) {
+                    tocHtml += '</ul>';
+                }
+                
+                var headingText = heading.textContent || '未命名标题';
+                tocHtml += '<li><a href="#' + heading.id + '">' + headingText + '</a></li>';
+                prevLevel = level;
+            });
+            
+            tocHtml += '</ul>';
+            toc.innerHTML = tocHtml;
+        } else {
+            // 如果没有标题，隐藏目录容器
+            if (tocContainer) {
+                tocContainer.style.display = 'none';
+            }
+        }
+    });
+</script>
+{% endblock %} 

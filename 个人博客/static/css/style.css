@@ -1,0 +1,126 @@
+/* 全局样式 */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.footer {
+    margin-top: auto;
+}
+
+/* 标签样式 */
+.tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tag-item {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    color: #0d6efd;
+    text-decoration: none;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+
+.tag-item:hover {
+    background-color: #0d6efd;
+    color: #fff;
+}
+
+.note-tags .badge {
+    margin-right: 0.25rem;
+}
+
+/* 笔记内容样式 */
+.note-content {
+    line-height: 1.6;
+}
+
+.note-content h1, 
+.note-content h2, 
+.note-content h3, 
+.note-content h4, 
+.note-content h5, 
+.note-content h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.note-content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1rem auto;
+}
+
+.note-content pre {
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    overflow-x: auto;
+}
+
+.note-content blockquote {
+    padding: 0.5rem 1rem;
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+    margin: 1rem 0;
+}
+
+.note-content table {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+}
+
+.note-content table th, 
+.note-content table td {
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+}
+
+.note-content table th {
+    background-color: #f8f9fa;
+}
+
+/* 分类列表样式 */
+.category-list .list-group-item {
+    border-left: none;
+    border-right: none;
+    padding-left: 0.5rem;
+}
+
+/* 自动保存状态提示 */
+.autosave-status {
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* 登录和注册表单 */
+.auth-form {
+    max-width: 400px;
+    margin: 2rem auto;
+    padding: 1.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    background-color: #fff;
+}
+
+.auth-form .form-floating {
+    margin-bottom: 1rem;
+}
+
+/* 响应式调整 */
+@media (max-width: 767.98px) {
+    .note-content img {
+        width: 100%;
+    }
+    
+    .col-md-3 {
+        margin-bottom: 1.5rem;
+    }
+} 
