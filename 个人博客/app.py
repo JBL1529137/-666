@@ -15,6 +15,7 @@ from db_tinydb import (
 )
 import tempfile
 import secrets
+import sys
 
 # 配置应用
 app = Flask(__name__, 
@@ -936,10 +937,19 @@ def autosave_note():
 def inject_now():
     return {'now': datetime.now()}
 
-# 在文件最后添加这段代码，确保Vercel可以找到app实例
-app.debug = False
-# 确保应用可被Vercel识别
-application = app
+# 为Vercel无服务器环境做特殊处理
+print("Python版本:", sys.version)
+print("当前工作目录:", os.getcwd())
+print("文件列表:", os.listdir('.'))
+
+# 确保静态目录存在
+for dir_path in [app.config['UPLOAD_FOLDER'], 'static/css', 'static/js']:
+    os.makedirs(dir_path, exist_ok=True)
+
+# 为Vercel导出应用实例
+app.debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+application = app  # For WSGI
+handler = app      # For Vercel serverless
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0")
